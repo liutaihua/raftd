@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/goraft/raft"
-	"github.com/goraft/raftd/command"
-	"github.com/goraft/raftd/db"
+//	command "github.com/goraft/raft/write_command"
+//	"github.com/goraft/raft/db"
 	"github.com/gorilla/mux"
 	"io/ioutil"
 	"log"
@@ -27,7 +27,7 @@ type Server struct {
 	router     *mux.Router
 	raftServer raft.Server
 	httpServer *http.Server
-	db         *db.DB
+	db         *raft.DB
 	mutex      sync.RWMutex
 }
 
@@ -37,7 +37,7 @@ func New(path string, host string, port int) *Server {
 		host:   host,
 		port:   port,
 		path:   path,
-		db:     db.New(),
+		db:     raft.NewDB(),
 		router: mux.NewRouter(),
 	}
 
@@ -175,7 +175,7 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 	value := string(b)
 
 	// Execute the command against the Raft server.
-	_, err = s.raftServer.Do(command.NewWriteCommand(vars["key"], value))
+	_, err = s.raftServer.Do(raft.NewWriteCommand(vars["key"], value))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}

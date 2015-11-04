@@ -4,7 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/goraft/raft"
-	"github.com/goraft/raftd/command"
+//	"github.com/goraft/raft/command"
 	"github.com/goraft/raftd/server"
 	"log"
 	"math/rand"
@@ -49,7 +49,7 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 
 	// Setup commands.
-	raft.RegisterCommand(&command.WriteCommand{})
+	raft.RegisterCommand(&raft.WriteCommand{})
 
 	// Set the data directory.
 	if flag.NArg() == 0 {
