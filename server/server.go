@@ -66,7 +66,7 @@ func (s *Server) ListenAndServe(leader string) error {
 	log.Printf("Initializing Raft Server: %s", s.path)
 
 	// Initialize and start Raft server.
-	transporter := raft.NewHTTPTransporter("/raft", 200*time.Millisecond)
+	transporter := raft.NewHTTPTransporter("/raft", "db", 10*time.Millisecond)
 	s.raftServer, err = raft.NewServer(s.name, s.path, transporter, nil, s.db, "")
 	if err != nil {
 		log.Fatal(err)

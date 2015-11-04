@@ -21,3 +21,8 @@ _testmain.go
 
 *.exe
 main
+.idea
+.idea/*
+node1
+node2
+node3
