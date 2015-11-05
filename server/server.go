@@ -15,6 +15,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+	"bufio"
+	"github.com/gorilla/websocket"
 )
 
 // The raftd server is a combination of the Raft server and an HTTP
@@ -57,6 +59,16 @@ func New(path string, host string, port int) *Server {
 // Returns the connection string.
 func (s *Server) connectionString() string {
 	return fmt.Sprintf("http://%s:%d", s.host, s.port)
+}
+
+func (s *Server) OnMsgRec() <-chan interface {} {
+//	for {
+//		select {
+//		case m := <- s.raftServer.GetRec():
+//			fmt.Println("main server rec from raft server:", m)
+//		}
+//	}
+	return s.raftServer.GetRec()
 }
 
 // Starts the server.
@@ -112,6 +124,7 @@ func (s *Server) ListenAndServe(leader string) error {
 	}
 
 	s.router.HandleFunc("/db/{key}", s.readHandler).Methods("GET")
+	s.router.HandleFunc("/push", s.WsReadHandler).Methods("GET")
 	s.router.HandleFunc("/db/{key}", s.writeHandler).Methods("POST")
 	s.router.HandleFunc("/join", s.joinHandler).Methods("POST")
 
@@ -161,6 +174,84 @@ func (s *Server) readHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	value := s.db.Get(vars["key"])
 	w.Write([]byte(value))
+}
+
+var 	upgrader = websocket.Upgrader{ReadBufferSize:  4096, WriteBufferSize: 4096, CheckOrigin:     ReqCheckOrigin}
+func ReqCheckOrigin(req *http.Request) bool {
+	return true
+}
+
+func (s *Server) WsReadHandler(w http.ResponseWriter, req *http.Request) {
+	fmt.Println("WsReadHandler start...")
+	ws, err := upgrader.Upgrade(w, req, nil)
+	if err != nil {
+		fmt.Println("upgrade error")
+		return
+	}
+	// For debugging purpose, get remote IP
+	remote_addr := req.Header.Get("X-Forwarded-For")
+	if remote_addr == "" {
+		remote_addr = req.RemoteAddr
+	}
+
+	ws_query := req.URL.Query()
+	fmt.Println("ws_query:", ws_query)
+	var username, channel string
+	if value, ok := ws_query["username"]; ok {
+		username = value[0]
+	} else {
+		return
+	}
+
+	if value, ok := ws_query["channel"]; ok {
+		channel = value[0]
+	} else {
+		return
+	}
+
+	if username == "" || channel == "" {
+		return
+	}
+
+	stoped := make(chan bool)
+	c := make(chan []byte)
+	go func() {
+		for {
+			ws.SetReadDeadline(time.Now().Add(300 * time.Second))
+			_, r, err := ws.NextReader()
+			if err != nil {
+				fmt.Println("Read Failed:", err)
+				stoped <- true
+				return
+			}
+			reader := bufio.NewReader(r)
+			data, err := reader.ReadBytes('\n')
+			if err != nil {
+				fmt.Println("WebSocket Server: Websocket Read Failed:", err)
+				stoped <- true
+				return
+				//			break
+//				continue
+			}
+			c <- data
+		}
+	}()
+	for {
+		select {
+		case m := <-s.OnMsgRec():
+			fmt.Println("got raft data", m.(string))
+			ws.WriteMessage(websocket.TextMessage, []byte(m.(string)))
+		case data := <- c:
+			fmt.Println("WebSocket recieve data:", string(data))
+			ws.WriteMessage(websocket.TextMessage, data)
+		case <- stoped:
+			return
+		}
+	}
+	defer func() {
+		fmt.Println("a websocket finished")
+		ws.Close()
+	}()
 }
 
 func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {

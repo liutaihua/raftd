@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"github.com/goraft/raft"
-//	"github.com/goraft/raft/command"
 	"github.com/goraft/raftd/server"
 	"log"
 	"math/rand"
