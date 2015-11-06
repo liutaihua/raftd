@@ -161,10 +161,16 @@ func New(path string, host string, port int) *Server {
 
 func (s *Server) lookUser() {
 	for {
-		for _, u := range s.users {
-			fmt.Println("exist user:", u.name, "nil ws:", u.ws==nil, len(u.stopped))
-		}
+		s.listUser()
 		time.Sleep(time.Second*3)
+	}
+}
+
+func (s *Server) listUser() {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	for _, u := range s.users {
+		fmt.Println("exist user:", u.name, "nil ws:", u.ws==nil, len(u.stopped))
 	}
 }
 
@@ -240,7 +246,7 @@ func (s *Server) ListenRaftAppendedEntrys() {
 	for {
 		select {
 		case m := <-s.OnMsgRec():
-			fmt.Println("app server got raft appended", m)
+//			fmt.Println("app server got raft appended", m)
 			/* TODO process this msg, like user online, django's message to user
 			cache the message in memory wait for user online
 			update userlist struct
@@ -264,10 +270,10 @@ func (s *Server) ListenRaftAppendedEntrys() {
 				fmt.Println("new user message", msg)
 				s.doNewMsg(msg)
 			case UserOnlineType:
-				fmt.Println("user online msg", msg)
+//				fmt.Println("user online msg", msg)
 				s.doUserOnline(msg.Username)
 			case UserOfflineType:
-				fmt.Println("user offline msg", msg)
+//				fmt.Println("user offline msg", msg)
 				s.doUserOffline(msg.Username)
 			default:
 				fmt.Println("default type", msg)
@@ -283,7 +289,7 @@ func (s *Server) ListenAndServe(leader string) error {
 	log.Printf("Initializing Raft Server: %s", s.path)
 
 	// Initialize and start Raft server.
-	transporter := raft.NewHTTPTransporter("/raft", "db", 10*time.Millisecond)
+	transporter := raft.NewHTTPTransporter("/raft", "db", 200*time.Millisecond)
 	s.raftServer, err = raft.NewServer(s.name, s.path, transporter, nil, s.db, "")
 	if err != nil {
 		log.Fatal(err)
@@ -469,13 +475,15 @@ func (s *Server) writeHandler(w http.ResponseWriter, req *http.Request) {
 
 func (s *Server) NewUserMessageHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
-	if channel, ok := vars["channel"]; !ok {
+	channel, ok := vars["channel"]
+	if !ok {
 		fmt.Println(channel)
 		http.Error(w, "channel name not in url", 400)
 		return
 	}
 	// Read the value from the POST body.
 	b, err := ioutil.ReadAll(req.Body)
+	fmt.Println("post rec:", vars, string(b))
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -483,7 +491,7 @@ func (s *Server) NewUserMessageHandler(w http.ResponseWriter, req *http.Request)
 	value := string(b)
 
 	// Execute the command against the Raft server.
-	_, err = s.raftServer.Do(raft.NewWriteCommand(vars["key"], value))
+	_, err = s.raftServer.Do(raft.NewWriteCommand(channel, value))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
