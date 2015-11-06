@@ -116,3 +116,13 @@ You will need to add additional nodes to allow failures to not affect the system
 For example, with 3 nodes you can have 1 node fail.
 With 5 nodes you can have 2 nodes fail.
 
+
+TODO
+大约做这样一件事
+raft是用早前etcd用过的那个raft库实现， 这一块有需要再把etcd剥一遍， 把它新版的raft实现拿来用
+raft层作为集群的底层， 对raft的代码基本保持不变动
+原先的raft只有leader节点支持write， follower和其他状态的节点，只支持read， 做了一些修改， 让follower的loop里，
+如果收到write command，就经过raft自己的transport发送给leader节点， 这里还是没有使用protobuf来做序列化发送，而是json明文，以后改进成和raft实现中的appendEntryRequest结构一样的方式
+
+在raft上层是应用逻辑的一层http服务，应用层自己封装好一个Message结构，每当新的user登陆到某个节点， 节点应该发送一个message， 通知集群更新在线用户列表
+注意的是， 消息必须是经过raft接口完成的，
